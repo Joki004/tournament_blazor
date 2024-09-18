@@ -1,5 +1,4 @@
-﻿Here's a description you can use for your Blazor tournament management app on GitHub, incorporating the work you've done and leaving space for images.
-
+﻿
 ---
 
 ## 🏆 Tournament Management Blazor App
