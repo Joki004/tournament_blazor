@@ -1,0 +1,49 @@
+﻿@page "/tournamenttypes/details"
+
+@using Microsoft.EntityFrameworkCore
+@using tournament_blazor.Models.db_manager
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Details</PageTitle>
+
+<h1>Details</h1>
+
+<div>
+    <h4>TournamentTypes</h4>
+    <hr />
+    @if (tournamenttypes is null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else {
+        <dl class="row">
+            <dt class="col-sm-2">TournamentTypeName</dt>
+            <dd class="col-sm-10">@tournamenttypes.TournamentTypeName</dd>
+            <dt class="col-sm-2">Description</dt>
+            <dd class="col-sm-10">@tournamenttypes.Description</dd>
+        </dl>
+        <div>
+            <a href="@($"/tournamenttypes/edit?tournamenttypeid={tournamenttypes.TournamentTypeID}")">Edit</a> |
+            <a href="@($"/tournamenttypes")">Back to List</a>
+        </div>
+    }
+</div>
+
+@code {
+    TournamentTypes? tournamenttypes;
+
+    [SupplyParameterFromQuery]
+    public int TournamentTypeID { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = DbFactory.CreateDbContext();
+        tournamenttypes = await context.TournamentTypes.FirstOrDefaultAsync(m => m.TournamentTypeID == TournamentTypeID);
+
+        if (tournamenttypes is null)
+        {
+            NavigationManager.NavigateTo("notfound");
+        }
+    }
+}

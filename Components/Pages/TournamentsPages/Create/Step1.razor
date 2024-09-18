@@ -1,0 +1,164 @@
+﻿@page "/tournaments/create/step1"
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Authorization
+@using tournament_blazor.Models.db_manager
+@using tournament_blazor.Services
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@inject TournamentStateService TournamentStateService
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+<h2 class="text-center mb-4">Step 1: Select or Add a Discipline</h2>
+
+<div class="card shadow p-4 mb-5 bg-white rounded">
+    <EditForm Model="@TournamentStateService.Tournament" OnValidSubmit="OnSubmit" FormName="Step1Form">
+        <DataAnnotationsValidator />
+        <ValidationSummary class="text-danger" />
+
+        <div class="form-group mb-4">
+            <label for="discipline" class="form-label fw-bold">Select Discipline</label>
+            <InputSelect id="discipline" @bind-Value="TournamentStateService.Tournament.DisciplineID" @onchange="OnDisciplineChanged" class="form-select">
+                @foreach (var discipline in Disciplines)
+                {
+                    <option value="@discipline.DisciplineID">@discipline.DisciplineName</option>
+                }
+            </InputSelect>
+            <ValidationMessage For="@(() => TournamentStateService.Tournament.DisciplineID)" />
+        </div>
+
+        <div class="form-group mb-4">
+            <label for="newDiscipline" class="form-label fw-bold">Or Add New Discipline</label>
+            <InputText id="newDiscipline" @bind-Value="NewDisciplineName" @oninput="OnNewDisciplineNameChanged" class="form-control" placeholder="Enter new discipline name" />
+            <ValidationMessage For="@(() => NewDisciplineName)" />
+        </div>
+
+        @if (ShowNewDisciplineFields)
+        {
+            <div class="mb-4">
+                <label for="description" class="form-label fw-bold">Discipline Description</label>
+                <InputTextArea id="description" @bind-Value="NewDisciplineDescription" class="form-control" placeholder="Enter description" rows="3" />
+                <ValidationMessage For="@(() => NewDisciplineDescription)" />
+            </div>
+
+            <div class="form-group mb-4">
+                <label for="playersPerTeam" class="form-label fw-bold">Players Per Team</label>
+                <InputNumber id="playersPerTeam" @bind-Value="NewDisciplinePlayersPerTeam" TValue="int" class="form-control" />
+                <ValidationMessage For="@(() => NewDisciplinePlayersPerTeam)" />
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <div class="alert alert-danger mt-3">@ErrorMessage</div>
+        }
+
+        <div class="d-grid mt-4">
+            <button type="submit" class="btn btn-primary btn-lg">Next</button>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    public List<Disciplines> Disciplines { get; set; } = new();
+    public string NewDisciplineName { get; set; } = string.Empty;
+    public string NewDisciplineDescription { get; set; } = string.Empty;
+    public int NewDisciplinePlayersPerTeam { get; set; } = 0;
+    public bool ShowNewDisciplineFields { get; set; } = false;
+    public string ErrorMessage { get; set; } = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = DbFactory.CreateDbContext();
+        Disciplines = await context.Disciplines.ToListAsync();
+
+        // Set the first discipline as default if none is selected
+        if (Disciplines.Any() && TournamentStateService.Tournament.DisciplineID == Guid.Empty)
+        {
+            TournamentStateService.Tournament.DisciplineID = Disciplines.First().DisciplineID;
+        }
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity.IsAuthenticated)
+        {
+            var userId = user.FindFirst(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!string.IsNullOrEmpty(userId))
+            {
+                TournamentStateService.Tournament.UserID = userId;
+            }
+        }
+    }
+
+    private void OnNewDisciplineNameChanged(ChangeEventArgs e)
+    {
+        NewDisciplineName = e.Value?.ToString() ?? string.Empty;
+        ShowNewDisciplineFields = !string.IsNullOrWhiteSpace(NewDisciplineName);
+        StateHasChanged();
+    }
+
+    private void OnDisciplineChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out Guid selectedDisciplineId))
+        {
+            TournamentStateService.Tournament.DisciplineID = selectedDisciplineId;
+            Console.WriteLine($"Discipline Changed: {TournamentStateService.Tournament.DisciplineID}");
+        }
+    }
+
+    private async Task OnSubmit()
+    {
+        using var context = DbFactory.CreateDbContext();
+
+        if (!string.IsNullOrWhiteSpace(NewDisciplineName))
+        {
+            var existingDiscipline = await context.Disciplines
+                .FirstOrDefaultAsync(d => d.DisciplineName == NewDisciplineName);
+
+            if (existingDiscipline != null)
+            {
+                ErrorMessage = "The discipline name already exists. Please choose a different name.";
+                return;
+            }
+
+            var newDiscipline = new Disciplines
+                {
+                    DisciplineID = Guid.NewGuid(),
+                    DisciplineName = NewDisciplineName,
+                    Description = NewDisciplineDescription,
+                    PlayersPerTeam = NewDisciplinePlayersPerTeam
+                };
+
+            context.Disciplines.Add(newDiscipline);
+            await context.SaveChangesAsync();
+
+            var insertedDiscipline = await context.Disciplines
+            .FirstOrDefaultAsync(d => d.DisciplineName == NewDisciplineName);
+
+            if (insertedDiscipline != null)
+            {
+                TournamentStateService.Tournament.DisciplineID = insertedDiscipline.DisciplineID;
+            }
+            else
+            {
+                ErrorMessage = "Error: DisciplineID is not set. Please try again.";
+                return;
+            }
+        }
+
+        if (TournamentStateService.Tournament.DisciplineID == Guid.Empty)
+        {
+            ErrorMessage = "Error: DisciplineID is not set. Please select or add a discipline.";
+            return;
+        }
+
+        Console.WriteLine("Moving to Step 2...");
+        Console.WriteLine($"Tournament DisciplineID: {TournamentStateService.Tournament.DisciplineID}");
+
+        NavigationManager.NavigateTo("/tournaments/create/step2");
+    }
+}

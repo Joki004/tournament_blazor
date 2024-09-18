@@ -1,0 +1,175 @@
+﻿@page "/tournaments/ranking"
+@using Microsoft.EntityFrameworkCore
+@using tournament_blazor.Models.db_manager
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+
+<div class="container mt-5">
+
+
+    @if (tournament != null && tournament.TournamentTypeID == 2)
+    {
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-secondary text-white">
+                        <h4 class="mb-0">@tournament.TournamentName - Ranking</h4>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-dark table-striped table-hover text-center align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Position</th>
+                                    <th>Team</th>
+                                    <th>Matches Played</th>
+                                    <th>Wins</th>
+                                    <th>Draws</th>
+                                    <th>Losses</th>
+                                    <th>Goals Scored</th>
+                                    <th>Goals Conceded</th>
+                                    <th>Points</th>
+                                    <th>Last 5</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var ranking in teamRankings)
+                                {
+                                    <tr>
+                                        <td>@ranking.Position</td>
+                                        <td>@ranking.Team.TeamName</td>
+                                        <td>@ranking.MatchesPlayed</td>
+                                        <td>@ranking.Wins</td>
+                                        <td>@ranking.Draws</td>
+                                        <td>@ranking.Losses</td>
+                                        <td>@ranking.GoalsScored</td>
+                                        <td>@ranking.GoalsConceded</td>
+                                        <td>@ranking.Points</td>
+                                        <td class="text-start">
+                                            @foreach (var form in ranking.RecentForm.Take(5))
+                                            {
+                                                <span class="badge rounded-pill @(form == "W" ? "bg-success" : form == "L" ? "bg-danger" : "bg-warning")">
+                                                    @(form == "W" ? "✔" : form == "L" ? "✘" : "➖")
+                                                </span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-info mt-3">
+            <strong>No ranking available for this tournament.</strong>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int TournamentID { get; set; }
+
+    List<TeamRanking> teamRankings = new();
+    Tournaments? tournament;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+
+        tournament = await context.Tournaments
+            .FirstOrDefaultAsync(t => t.TournamentID == TournamentID);
+
+        if (tournament == null)
+        {
+            return; 
+        }
+
+        if (tournament.TournamentTypeID == 2)
+        {
+            var matches = await context.RoundRobinMatches
+                .Include(m => m.Team1)
+                .Include(m => m.Team2)
+                .Where(m => m.TournamentID == TournamentID)
+                .ToListAsync();
+
+            teamRankings = CalculateTeamRankings(matches);
+        }
+    }
+
+    private List<TeamRanking> CalculateTeamRankings(List<RoundRobinMatches> matches)
+    {
+        var teamStats = new Dictionary<int, TeamRanking>();
+
+        foreach (var match in matches)
+        {
+            if (!teamStats.ContainsKey(match.Team1ID))
+                teamStats[match.Team1ID] = new TeamRanking { Team = match.Team1 };
+            if (!teamStats.ContainsKey(match.Team2ID))
+                teamStats[match.Team2ID] = new TeamRanking { Team = match.Team2 };
+
+            var team1Stats = teamStats[match.Team1ID];
+            var team2Stats = teamStats[match.Team2ID];
+
+            if (match.Team1Score.HasValue && match.Team2Score.HasValue)
+            {
+                team1Stats.MatchesPlayed++;
+                team2Stats.MatchesPlayed++;
+
+                if (match.Team1Score > match.Team2Score)
+                {
+                    team1Stats.Wins++;
+                    team2Stats.Losses++;
+                    team1Stats.RecentForm.Insert(0, "W");
+                    team2Stats.RecentForm.Insert(0, "L");
+                }
+                else if (match.Team2Score > match.Team1Score)
+                {
+                    team2Stats.Wins++;
+                    team1Stats.Losses++;
+                    team2Stats.RecentForm.Insert(0, "W");
+                    team1Stats.RecentForm.Insert(0, "L");
+                }
+                else
+                {
+                    team1Stats.Draws++;
+                    team2Stats.Draws++;
+                    team1Stats.RecentForm.Insert(0, "D");
+                    team2Stats.RecentForm.Insert(0, "D");
+                }
+
+                team1Stats.GoalsScored += match.Team1Score ?? 0;
+                team2Stats.GoalsScored += match.Team2Score ?? 0;
+                team1Stats.GoalsConceded += match.Team2Score ?? 0;
+                team2Stats.GoalsConceded += match.Team1Score ?? 0;
+            }
+        }
+
+        foreach (var teamStat in teamStats.Values)
+        {
+            teamStat.Points = teamStat.Wins * 3 + teamStat.Draws;
+        }
+
+        return teamStats.Values
+            .OrderByDescending(ts => ts.Points)
+            .ThenBy(ts => ts.Wins)
+            .Select((ts, index) => { ts.Position = index + 1; return ts; })
+            .ToList();
+    }
+
+    public class TeamRanking
+    {
+        public int Position { get; set; }
+        public Teams Team { get; set; } = default!;
+        public int MatchesPlayed { get; set; }
+        public int Wins { get; set; }
+        public int Draws { get; set; }
+        public int Losses { get; set; }
+        public int GoalsScored { get; set; }
+        public int GoalsConceded { get; set; }
+        public int Points { get; set; }
+        public List<string> RecentForm { get; set; } = new List<string>();
+    }
+}

@@ -1,0 +1,117 @@
+﻿@page "/tournaments/schedule"
+
+@using Microsoft.EntityFrameworkCore
+@using tournament_blazor.Models.db_manager
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@inject NavigationManager NavigationManager
+
+<h3 class="mt-4">@tournamentName tournament Schedule </h3>
+<hr />
+
+@if (matches == null || !matches.Any())
+{
+    <p class="text-danger">No matches have been scheduled yet.</p>
+}
+else
+{
+    <table class="table table-hover table-striped table-bordered mt-4">
+        <thead class="thead-dark">
+            <tr>
+                <th>Date</th>
+                <th>Team 1</th>
+                <th>Team 2</th>
+                <th>Score</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var match in matches)
+            {
+                <tr>
+                    <td>@match.MatchDate?.ToString("MMMM dd, yyyy")</td>
+                    <td>@(match.Team1 != null ? match.Team1.TeamName : "Team 1 TBD")</td>
+                    <td>@(match.Team2 != null ? match.Team2.TeamName : "Team 2 TBD")</td>
+
+                    <td>
+                        @if (match.Team1Score.HasValue && match.Team2Score.HasValue)
+                        {
+                            @($"{match.Team1Score} - {match.Team2Score}")
+                        }
+                        else
+                        {
+                            <span class="text-warning">Not Played</span>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<div class="mt-4">
+    <a href="@($"/tournaments/details?tournamentid={TournamentID}")" class="btn btn-secondary">Back to Tournament Details</a>
+</div>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public int TournamentID { get; set; }
+    public string tournamentName { get; set; } = string.Empty;
+    private List<MatchDisplay> matches = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+
+        var tournament = await context.Tournaments
+            .FirstOrDefaultAsync(t => t.TournamentID == TournamentID);
+
+        if (tournament == null)
+        {
+            NavigationManager.NavigateTo("notfound");
+            return;
+        }
+        tournamentName = tournament.TournamentName;
+        if (tournament.TournamentTypeID == 2) 
+        {
+            matches = await context.RoundRobinMatches
+                .Include(m => m.Team1)
+                .Include(m => m.Team2)
+                .Where(m => m.TournamentID == TournamentID)
+                .OrderBy(m => m.MatchDate)
+                .Select(m => new MatchDisplay
+                    {
+                        MatchDate = m.MatchDate,
+                        Team1 = m.Team1,
+                        Team2 = m.Team2,
+                        Team1Score = m.Team1Score,
+                        Team2Score = m.Team2Score
+                    })
+                .ToListAsync();
+        }
+        else if (tournament.TournamentTypeID == 1)
+        {
+            matches = await context.BracketMatches
+                .Include(m => m.Team1)
+                .Include(m => m.Team2)
+                .Where(m => m.TournamentID == TournamentID)
+                .OrderBy(m => m.MatchDate)
+                .Select(m => new MatchDisplay
+                    {
+                        MatchDate = m.MatchDate,
+                        Team1 = m.Team1,
+                        Team2 = m.Team2,
+                        Team1Score = m.Team1Score,
+                        Team2Score = m.Team2Score
+                    })
+                .ToListAsync();
+        }
+    }
+    private class MatchDisplay
+    {
+        public DateTime? MatchDate { get; set; }
+        public Teams? Team1 { get; set; }
+        public Teams? Team2 { get; set; }
+        public int? Team1Score { get; set; }
+        public int? Team2Score { get; set; }
+    }
+}

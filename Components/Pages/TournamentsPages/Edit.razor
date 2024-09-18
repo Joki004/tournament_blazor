@@ -1,0 +1,176 @@
+﻿@page "/Tournaments/edit"
+@using Microsoft.EntityFrameworkCore
+@using tournament_blazor.Models.db_manager
+@using tournament_blazor.Services
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@inject TournamentService TournamentService
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+<PageTitle>Edit Tournament</PageTitle>
+
+<h1>Edit Tournament</h1>
+
+
+
+@if (Tournaments == null || Disciplines == null || (Tournaments.TournamentTypeID == 2 && Matches == null) || (Tournaments.TournamentTypeID == 1 && BracketMatches == null))
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <EditForm EditContext="_editContext" OnValidSubmit="UpdateTournaments" FormName="EditTournament">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <TournamentForm Tournaments="Tournaments" Disciplines="Disciplines" />
+
+        @if (Tournaments.TournamentTypeID == 2)
+        {
+            <h4>Round Robin Matches</h4>
+            <hr />
+            <RoundRobinMatchesForm Matches="Matches" />
+        }
+        else if (Tournaments.TournamentTypeID == 1)
+        {
+            <h4>Bracket Matches</h4>
+            <hr />
+            <BracketMatchesForm Matches="BracketMatches" />
+        }
+
+        <div class="card mt-4">
+            <div class="card-header bg-info text-white">
+                <h4>Edit Team Names</h4>
+            </div>
+            <div class="card-body">
+                @foreach (var teamID in teamNames.Keys)
+                {
+                    <div class="form-group">
+                        <label>Team Name (ID: @teamID):</label>
+                        <InputText @bind-Value="teamNames[teamID]" class="form-control" />
+                    </div>
+                }
+            </div>
+        </div>
+        @if (!string.IsNullOrEmpty(SuccessMessage))
+        {
+            <div class="alert alert-success">@SuccessMessage</div>
+        }
+
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <div class="alert alert-danger">@ErrorMessage</div>
+        }
+        <button type="submit" class="btn btn-primary">Save</button>
+    </EditForm>
+}
+
+<div>
+    <a href="/tournaments">Back to List</a>
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    public int TournamentID { get; set; }
+
+    public Tournaments? Tournaments { get; set; }
+    public List<Disciplines>? Disciplines { get; set; }
+    public List<RoundRobinMatches>? Matches { get; set; }
+    public List<BracketMatches>? BracketMatches { get; set; }
+
+    private string SuccessMessage = string.Empty;
+    private string ErrorMessage = string.Empty;
+    private Dictionary<int, string> teamNames = new();
+    private EditContext _editContext;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = DbFactory.CreateDbContext();
+        Tournaments = await context.Tournaments.FirstOrDefaultAsync(t => t.TournamentID == TournamentID);
+        Disciplines = await context.Disciplines.ToListAsync();
+
+        if (Tournaments != null)
+        {
+            _editContext = new EditContext(Tournaments);
+
+            if (Tournaments.TournamentTypeID == 2)
+            {
+                Matches = await context.RoundRobinMatches
+                    .Include(m => m.Team1)
+                    .Include(m => m.Team2)
+                    .Where(m => m.TournamentID == TournamentID)
+                    .ToListAsync();
+
+                var teamIDs = Matches.SelectMany(m => new[] { m.Team1ID, m.Team2ID }).Distinct();
+                var teams = await context.Teams.Where(t => teamIDs.Contains(t.TeamID)).ToListAsync();
+                foreach (var team in teams)
+                {
+                    teamNames[team.TeamID] = team.TeamName;
+                }
+            }
+            else if (Tournaments.TournamentTypeID == 1)
+            {
+                BracketMatches = await context.BracketMatches
+                    .Include(m => m.Team1)
+                    .Include(m => m.Team2)
+                    .Where(m => m.TournamentID == TournamentID)
+                    .ToListAsync();
+
+                var teamIDs = BracketMatches.SelectMany(m => new[] { m.Team1ID, m.Team2ID }).Distinct();
+                var teams = await context.Teams.Where(t => teamIDs.Contains(t.TeamID)).ToListAsync();
+                foreach (var team in teams)
+                {
+                    teamNames[team.TeamID] = team.TeamName;
+                }
+            }
+        }
+
+    }
+
+    public async Task UpdateTournaments()
+    {
+        // Clear previous messages
+        SuccessMessage = string.Empty;
+        ErrorMessage = string.Empty;
+
+        if (!_editContext.Validate())
+        {
+            ErrorMessage = "The form contains invalid data. Please check and try again.";
+            return;
+        }
+
+        Console.WriteLine("Logging Tournament Details:");
+        Console.WriteLine($"Tournament ID: {Tournaments?.TournamentID}");
+        Console.WriteLine($"Tournament Name: {Tournaments?.TournamentName}");
+        Console.WriteLine($"Tournament Type: {Tournaments?.TournamentTypeID}");
+        Console.WriteLine($"Start Date: {Tournaments?.StartDate}");
+        Console.WriteLine($"End Date: {Tournaments?.EndDate}");
+        Console.WriteLine($"Is Public: {Tournaments?.IsPublic}");
+
+        using var context = DbFactory.CreateDbContext();
+        foreach (var teamID in teamNames.Keys)
+        {
+            var team = await context.Teams.FirstOrDefaultAsync(t => t.TeamID == teamID);
+            if (team != null)
+            {
+                team.TeamName = teamNames[teamID];
+            }
+        }
+
+        await context.SaveChangesAsync();
+
+        bool updateResult = await TournamentService.UpdateTournamentAndMatches(Tournaments!, Matches!, BracketMatches!);
+
+        if (updateResult)
+        {
+            SuccessMessage = "Tournament and matches updated successfully.";
+        }
+        else
+        {
+            ErrorMessage = "Update failed. Please try again.";
+        }
+    }
+}

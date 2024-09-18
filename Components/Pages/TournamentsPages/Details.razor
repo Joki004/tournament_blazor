@@ -1,0 +1,274 @@
+﻿@page "/tournaments/details"
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using tournament_blazor.Models.db_manager
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Tournament Details</PageTitle>
+
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Tournament Overview</h4>
+                </div>
+                <div class="card-body">
+                    @if (tournament == null)
+                    {
+                        <p><em>Loading...</em></p>
+                    }
+                    else
+                    {
+                        <dl class="row">
+                            <dt class="col-sm-4">Tournament Name</dt>
+                            <dd class="col-sm-8">@tournament.TournamentName</dd>
+
+                            <dt class="col-sm-4">Discipline</dt>
+                            <dd class="col-sm-8" title="@disciplineDescription" data-toggle="tooltip">@disciplineName</dd>
+
+                            <dt class="col-sm-4">Type</dt>
+                            <dd class="col-sm-8" title="@tournamentTypeDescription" data-toggle="tooltip">@tournamentTypeName</dd>
+
+                            <dt class="col-sm-4">Number of Teams</dt>
+                            <dd class="col-sm-8">@tournament.NumberOfTeams</dd>
+
+                            <dt class="col-sm-4">Start Date</dt>
+                            <dd class="col-sm-8">@tournament.StartDate.ToShortDateString()</dd>
+
+                            <dt class="col-sm-4">End Date</dt>
+                            <dd class="col-sm-8">@(@tournament.EndDate != null ? @tournament.EndDate?.ToShortDateString() : "N/A")</dd>
+
+                            <dt class="col-sm-4">Winner</dt>
+                            <dd class="col-sm-8">@winnerTeamName</dd>
+                        </dl>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Tournament Image</h4>
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(tournament?.ImageUrl))
+                    {
+                        <img src="@tournament.ImageUrl" alt="Tournament Image" class="img-fluid rounded" />
+                    }
+                    else
+                    {
+                        <p>No image available</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        @if (tournament?.TournamentTypeID == 2)
+        {
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0">Round Robin Ranking</h4>
+                    </div>
+                    <div class="card-body">
+                        <Ranking TournamentID="@tournament.TournamentID" />
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (tournament?.TournamentTypeID == 1)
+        {
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0">Bracket Matches</h4>
+                    </div>
+                    <div class="card-body">
+                        <BracketMatch TournamentID="@tournament.TournamentID" />
+                    </div>
+                </div>
+            </div>
+        }
+        <div class="mt-4">
+            <button class="btn btn-primary" @onclick="NavigateToSchedule">View Full Schedule</button>
+        </div>
+    </div>
+
+    <div class="row mt-4 pb-4">
+        <div class="col-12 text-center">
+            <a href="/tournaments" class="btn btn-secondary">Back to List</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    Tournaments? tournament;
+    string? disciplineName;
+    string? disciplineDescription;
+    string? tournamentTypeName;
+    string? tournamentTypeDescription;
+    string? winnerTeamName = "No winner yet";
+
+    [SupplyParameterFromQuery]
+    public int TournamentID { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+
+        // Fetch the tournament
+        tournament = await context.Tournaments
+            .Include(t => t.Discipline)
+            .FirstOrDefaultAsync(m => m.TournamentID == TournamentID);
+
+        if (tournament == null)
+        {
+            NavigationManager.NavigateTo("notfound");
+            return;
+        }
+
+        disciplineName = tournament.Discipline?.DisciplineName ?? "N/A";
+        disciplineDescription = tournament.Discipline?.Description ?? "No description available.";
+
+        var tournamentType = await context.TournamentTypes
+            .FirstOrDefaultAsync(tt => tt.TournamentTypeID == tournament.TournamentTypeID);
+
+        tournamentTypeName = tournamentType?.TournamentTypeName ?? "N/A";
+        tournamentTypeDescription = tournamentType?.Description ?? "No description available.";
+
+        await SetTournamentEndDateAsync(context);
+        await DetermineWinnerAsync(context);
+    }
+
+    private async Task DetermineWinnerAsync(tournament_blazor.Data.tournamentDbContext context)
+    {
+        if (tournament == null) return;
+
+        if (tournament.TournamentTypeID == 2)
+        {
+            var matches = await context.RoundRobinMatches
+                .Where(m => m.TournamentID == tournament.TournamentID)
+                .ToListAsync();
+
+            if (matches.All(m => m.Team1Score.HasValue && m.Team2Score.HasValue))
+            {
+                var teamScores = new Dictionary<int, int>();
+
+                foreach (var match in matches)
+                {
+                    if (match.Team1Score > match.Team2Score)
+                    {
+                        if (!teamScores.ContainsKey(match.Team1ID))
+                            teamScores[match.Team1ID] = 0;
+                        teamScores[match.Team1ID] += 3;
+                    }
+                    else if (match.Team2Score > match.Team1Score)
+                    {
+                        if (!teamScores.ContainsKey(match.Team2ID))
+                            teamScores[match.Team2ID] = 0;
+                        teamScores[match.Team2ID] += 3;
+                    }
+                    else
+                    {
+                        if (!teamScores.ContainsKey(match.Team1ID))
+                            teamScores[match.Team1ID] = 0;
+                        if (!teamScores.ContainsKey(match.Team2ID))
+                            teamScores[match.Team2ID] = 0;
+
+                        teamScores[match.Team1ID] += 1;
+                        teamScores[match.Team2ID] += 1;
+                    }
+                }
+
+                var winningTeamID = teamScores.OrderByDescending(t => t.Value).FirstOrDefault().Key;
+                var winner = await context.Teams.FirstOrDefaultAsync(t => t.TeamID == winningTeamID);
+
+                if (winner != null)
+                {
+                    winnerTeamName = winner.TeamName;
+                }
+            }
+        }
+        else if (tournament.TournamentTypeID == 1)
+        {
+            var matches = await context.BracketMatches
+                .Where(m => m.TournamentID == tournament.TournamentID)
+                .ToListAsync();
+
+            var finalRoundNumber = matches.Max(m => m.Round);
+            var finalRoundMatches = matches.Where(m => m.Round == finalRoundNumber).ToList();
+
+            if (finalRoundMatches.Count == 1)
+            {
+                var finalMatch = finalRoundMatches.First();
+                var winner = finalMatch.Team1Score > finalMatch.Team2Score
+                    ? await context.Teams.FirstOrDefaultAsync(t => t.TeamID == finalMatch.Team1ID)
+                    : await context.Teams.FirstOrDefaultAsync(t => t.TeamID == finalMatch.Team2ID);
+
+                if (winner != null)
+                {
+                    winnerTeamName = winner.TeamName;
+                }
+            }
+            else
+            {
+                winnerTeamName = "Not yet decided";
+            }
+        }
+    }
+    
+    
+    private void NavigateToSchedule()
+    {
+        Console.WriteLine($"/tournaments/schedule?tournamentid={tournament.TournamentID}&tournamenttype={tournament.TournamentTypeID}");
+        NavigationManager.NavigateTo($"/tournaments/schedule?tournamentid={tournament.TournamentID}");
+    }
+
+
+    private async Task SetTournamentEndDateAsync(tournament_blazor.Data.tournamentDbContext context)
+    {
+        if (tournament == null) return;
+
+        DateTime? lastMatchDate = null;
+
+        if (tournament.TournamentTypeID == 2)
+        {
+            lastMatchDate = await context.RoundRobinMatches
+                .Where(m => m.TournamentID == tournament.TournamentID)
+                .OrderByDescending(m => m.MatchDate)
+                .Select(m => m.MatchDate)
+                .FirstOrDefaultAsync();
+        }
+        else if (tournament.TournamentTypeID == 1)
+        {
+            var matches = await context.BracketMatches
+                .Where(m => m.TournamentID == tournament.TournamentID)
+                .ToListAsync();
+
+            var finalRoundNumber = matches.Max(m => m.Round);
+            var finalRoundMatches = matches.Where(m => m.Round == finalRoundNumber).ToList();
+
+            if (finalRoundMatches.Count == 1)
+            {
+                lastMatchDate = finalRoundMatches.Max(m => m.MatchDate);
+            }
+            else
+            {
+                Console.WriteLine("The final round does not contain exactly one match. Cannot determine the final match.");
+            }
+        }
+
+        if (lastMatchDate.HasValue && (!tournament.EndDate.HasValue || tournament.EndDate != lastMatchDate))
+        {
+            tournament.EndDate = lastMatchDate.Value;
+            await context.SaveChangesAsync();
+        }
+    }
+
+}

@@ -1,0 +1,38 @@
+﻿@page "/tournamenttypes"
+
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.QuickGrid
+@using tournament_blazor.Models.db_manager
+@using tournament_blazor.Data
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@implements IAsyncDisposable
+
+<PageTitle>Index</PageTitle>
+
+<h1>Index</h1>
+
+<p>
+    <a href="tournamenttypes/create">Create New</a>
+</p>
+
+<QuickGrid Class="table" Items="context.TournamentTypes">
+    <PropertyColumn Property="tournamenttypes => tournamenttypes.TournamentTypeName" />
+    <PropertyColumn Property="tournamenttypes => tournamenttypes.Description" />
+
+    <TemplateColumn Context="tournamenttypes">
+        <a href="@($"tournamenttypes/edit?tournamenttypeid={tournamenttypes.TournamentTypeID}")">Edit</a> |
+        <a href="@($"tournamenttypes/details?tournamenttypeid={tournamenttypes.TournamentTypeID}")">Details</a> |
+        <a href="@($"tournamenttypes/delete?tournamenttypeid={tournamenttypes.TournamentTypeID}")">Delete</a>
+    </TemplateColumn>
+</QuickGrid>
+
+@code {
+    tournamentDbContext context = default!;
+
+    protected override void OnInitialized()
+    {
+        context = DbFactory.CreateDbContext();
+    }
+
+    public async ValueTask DisposeAsync() => await context.DisposeAsync();
+}

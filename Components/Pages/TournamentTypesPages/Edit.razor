@@ -1,0 +1,95 @@
+﻿@page "/TournamentTypes/edit"
+
+@using Microsoft.EntityFrameworkCore
+@using tournament_blazor.Models.db_manager
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Edit</PageTitle>
+
+<h1>Edit</h1>
+
+<h4>TournamentTypes</h4>
+<hr />
+@if (TournamentTypes is null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-4">
+            <EditForm method="post" Model="TournamentTypes" OnValidSubmit="UpdateTournamentTypes" FormName="edit" Enhance>
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <input type="hidden" name="TournamentTypes.TournamentTypeID" value="@TournamentTypes.TournamentTypeID" />
+                <div class="mb-3">
+                    <label for="tournamenttypename" class="form-label">TournamentTypeName:</label>
+                    <InputText id="tournamenttypename" @bind-Value="TournamentTypes.TournamentTypeName" class="form-control" />
+                    <ValidationMessage For="() => TournamentTypes.TournamentTypeName" class="text-danger" />
+                </div>
+                <div class="mb-3">
+                    <label for="description" class="form-label">Description:</label>
+                    <InputText id="description" @bind-Value="TournamentTypes.Description" class="form-control" />
+                    <ValidationMessage For="() => TournamentTypes.Description" class="text-danger" />
+                </div>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </EditForm>
+        </div>
+    </div>
+}
+
+<div>
+    <a href="/tournamenttypes">Back to List</a>
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    public int TournamentTypeID { get; set; }
+
+    [SupplyParameterFromForm]
+    public TournamentTypes? TournamentTypes { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = DbFactory.CreateDbContext();
+        TournamentTypes ??= await context.TournamentTypes.FirstOrDefaultAsync(m => m.TournamentTypeID == TournamentTypeID);
+
+        if (TournamentTypes is null)
+        {
+            NavigationManager.NavigateTo("notfound");
+        }
+    }
+
+    // To protect from overposting attacks, enable the specific properties you want to bind to.
+    // For more details, see https://aka.ms/RazorPagesCRUD.
+    public async Task UpdateTournamentTypes()
+    {
+        using var context = DbFactory.CreateDbContext();
+        context.Attach(TournamentTypes!).State = EntityState.Modified;
+
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            if (!TournamentTypesExists(TournamentTypes!.TournamentTypeID))
+            {
+                NavigationManager.NavigateTo("notfound");
+            }
+            else
+            {
+                throw;
+            }
+        }
+
+        NavigationManager.NavigateTo("/tournamenttypes");
+    }
+
+    bool TournamentTypesExists(int tournamenttypeid)
+    {
+        using var context = DbFactory.CreateDbContext();
+        return context.TournamentTypes.Any(e => e.TournamentTypeID == tournamenttypeid);
+    }
+}

@@ -1,0 +1,51 @@
+﻿@page "/tournamenttypes/create"
+
+@using Microsoft.EntityFrameworkCore
+@using tournament_blazor.Models.db_manager
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Create</PageTitle>
+
+<h1>Create</h1>
+
+<h4>TournamentTypes</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <EditForm method="post" Model="TournamentTypes" OnValidSubmit="AddTournamentTypes" FormName="create" Enhance>
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" />
+            <div class="mb-3">
+                <label for="tournamenttypename" class="form-label">TournamentTypeName:</label> 
+                <InputText id="tournamenttypename" @bind-Value="TournamentTypes.TournamentTypeName" class="form-control" /> 
+                <ValidationMessage For="() => TournamentTypes.TournamentTypeName" class="text-danger" /> 
+            </div>        
+            <div class="mb-3">
+                <label for="description" class="form-label">Description:</label> 
+                <InputText id="description" @bind-Value="TournamentTypes.Description" class="form-control" /> 
+                <ValidationMessage For="() => TournamentTypes.Description" class="text-danger" /> 
+            </div>        
+            <button type="submit" class="btn btn-primary">Create</button>
+        </EditForm>
+    </div>
+</div>
+
+<div>
+    <a href="/tournamenttypes">Back to List</a>
+</div>
+
+@code {
+
+    [SupplyParameterFromForm]
+    public TournamentTypes TournamentTypes { get; set; } = new TournamentTypes();
+
+    // To protect from overposting attacks, see https://aka.ms/RazorPagesCRUD
+    public async Task AddTournamentTypes()
+    {
+        using var context = DbFactory.CreateDbContext();
+        context.TournamentTypes.Add(TournamentTypes);
+        await context.SaveChangesAsync();
+        NavigationManager.NavigateTo("/tournamenttypes");
+    }
+}

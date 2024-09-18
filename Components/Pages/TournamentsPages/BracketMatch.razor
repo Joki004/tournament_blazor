@@ -1,0 +1,106 @@
+﻿@using Microsoft.EntityFrameworkCore
+@using tournament_blazor.Models.db_manager
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@inject NavigationManager NavigationManager
+
+<div class="bracket-container">
+    <h3>Bracket Matches</h3>
+
+    @if (bracketRounds == null || !bracketRounds.Any())
+    {
+        <p><em>No matches available for this bracket.</em></p>
+    }
+    else
+    {
+        <div class="bracket">
+            @for (int round = 1; round <= bracketRounds.Count; round++)
+            {
+                <div class="bracket-round">
+                    <h4>Round @round</h4>
+                    @foreach (var match in bracketRounds[round])
+                    {
+                        <div class="bracket-match">
+                            <div class="team">
+                                @(match.Team1 != null ? $"{match.Team1.TeamName}  -  {match.Team1Score}": "Team 1 TBD") 
+                            </div>
+                            <div class="team">
+                                @(match.Team2 != null ? $"{match.Team2.TeamName}  -  {match.Team2Score}" : "Team 1 TBD")
+                            </div>
+                            <div class="match-info">
+                                <span>@(match.MatchDate != null ? match.MatchDate?.ToShortDateString() : "TBD")</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int TournamentID { get; set; }
+
+    private Dictionary<int, List<BracketMatches>> bracketRounds = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+
+        // Fetch bracket matches for this tournament, grouped by rounds
+        var matches = await context.BracketMatches
+            .Include(m => m.Team1)
+            .Include(m => m.Team2)
+            .Where(m => m.TournamentID == TournamentID)
+            .OrderBy(m => m.Round)
+            .ToListAsync();
+
+        // Group the matches by round
+        bracketRounds = matches
+            .GroupBy(m => m.Round)
+            .ToDictionary(g => g.Key, g => g.ToList());
+    }
+}
+
+<style>
+    .bracket-container {
+        max-width: 100%;
+        overflow-x: auto;
+        margin-bottom: 2rem;
+    }
+
+    .bracket {
+        display: flex;
+        justify-content: space-around;
+        padding: 1rem;
+        background-color: #f8f9fa;
+        border-radius: 10px;
+    }
+
+    .bracket-round {
+        flex: 1;
+        margin-right: 20px;
+    }
+
+        .bracket-round:last-child {
+            margin-right: 0;
+        }
+
+    .bracket-match {
+        padding: 0.5rem;
+        border: 1px solid #ced4da;
+        border-radius: 5px;
+        margin-bottom: 1rem;
+        background-color: white;
+    }
+
+    .team {
+        font-weight: bold;
+        padding: 0.25rem 0;
+    }
+
+    .match-info {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+</style>

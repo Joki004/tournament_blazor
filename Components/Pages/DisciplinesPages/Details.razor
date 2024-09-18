@@ -1,0 +1,51 @@
+﻿@page "/disciplines/details"
+
+@using Microsoft.EntityFrameworkCore
+@using tournament_blazor.Models.db_manager
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Details</PageTitle>
+
+<h1>Details</h1>
+
+<div>
+    <h4>Disciplines</h4>
+    <hr />
+    @if (disciplines is null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else {
+        <dl class="row">
+            <dt class="col-sm-2">DisciplineName</dt>
+            <dd class="col-sm-10">@disciplines.DisciplineName</dd>
+            <dt class="col-sm-2">Description</dt>
+            <dd class="col-sm-10">@disciplines.Description</dd>
+            <dt class="col-sm-2">PlayersPerTeam</dt>
+            <dd class="col-sm-10">@disciplines.PlayersPerTeam</dd>
+        </dl>
+        <div>
+            <a href="@($"/disciplines/edit?disciplineid={disciplines.DisciplineID}")">Edit</a> |
+            <a href="@($"/disciplines")">Back to List</a>
+        </div>
+    }
+</div>
+
+@code {
+    Disciplines? disciplines;
+
+    [SupplyParameterFromQuery]
+    public Guid DisciplineID { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = DbFactory.CreateDbContext();
+        disciplines = await context.Disciplines.FirstOrDefaultAsync(m => m.DisciplineID == DisciplineID);
+
+        if (disciplines is null)
+        {
+            NavigationManager.NavigateTo("notfound");
+        }
+    }
+}

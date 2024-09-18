@@ -1,0 +1,98 @@
+﻿@page "/tournaments/create/step3"
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Authorization
+@using tournament_blazor.Models.db_manager
+@using tournament_blazor.Services
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@inject TournamentStateService TournamentStateService
+@inject NavigationManager NavigationManager
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+<h3>Step 3: Enter Number of Teams</h3>
+
+<EditForm Model="@TournamentStateService.Tournament" OnValidSubmit="ProceedToStep4" FormName="Step3Form">
+    <DataAnnotationsValidator />
+    <ValidationSummary class="text-danger" />
+
+    <div class="mb-3">
+        <label for="numberOfTeams" class="form-label">Number of Teams:</label>
+        <InputNumber @bind-Value="TournamentStateService.Tournament.NumberOfTeams" @oninput="OnNumberOfTeamsChanged" class="form-control" />
+        <ValidationMessage For="@(() => TournamentStateService.Tournament.NumberOfTeams)" />
+    </div>
+
+    @if (TournamentStateService.Tournament.NumberOfTeams > 0)
+    {
+        <h4>Enter Team Names (Leave blank to auto-generate)</h4>
+
+        var index = 0; // No need for @{}
+
+        @for (int i = 0; i < TournamentStateService.Tournament.NumberOfTeams; i++)
+        {
+            int loopIndex = index;
+            <div class="form-group">
+                <label>Team @(i + 1):</label>
+                <InputText @bind-Value="TournamentStateService.TeamNames[loopIndex]" class="form-control" />
+            </div>
+            index++;
+        }
+    }
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert alert-danger">@ErrorMessage</div>
+    }
+
+    <button type="submit" class="btn btn-primary">Next</button>
+</EditForm>
+
+@code {
+    private string? ErrorMessage;
+
+    protected override void OnInitialized()
+    {
+        // Initialize or adjust the team names based on the current number of teams
+        TournamentStateService.UpdateNumberOfTeams(TournamentStateService.Tournament.NumberOfTeams);
+    }
+
+    private void OnNumberOfTeamsChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int numberOfTeams))
+        {
+            TournamentStateService.UpdateNumberOfTeams(numberOfTeams);
+            StateHasChanged(); // Ensure the UI updates properly
+        }
+    }
+
+    private async Task ProceedToStep4()
+    {
+        Console.WriteLine("Proceeding to Step 4...");
+        Console.WriteLine($"Number of Teams: {TournamentStateService.Tournament.NumberOfTeams}");
+
+        // If the tournament type is a Bracket (assumed ID 1), validate for even number of teams
+        // Vérifier si le nombre d'équipes est une puissance de 2
+        if (TournamentStateService.Tournament.TournamentTypeID == 1 && (TournamentStateService.Tournament.NumberOfTeams & (TournamentStateService.Tournament.NumberOfTeams - 1)) != 0)
+        {
+            ErrorMessage = "A bracket tournament must have a number of teams that is a power of 2.";
+            Console.WriteLine(ErrorMessage);
+            return; // Stop here and display the error message
+        }
+
+
+        // Ensure team names are filled or auto-generate if blank
+        for (int i = 0; i < TournamentStateService.Tournament.NumberOfTeams; i++)
+        {
+            if (string.IsNullOrWhiteSpace(TournamentStateService.TeamNames[i]))
+            {
+                TournamentStateService.TeamNames[i] = $"Team {i + 1}"; // Auto-generate team name if blank
+            }
+            Console.WriteLine($"Team {i + 1} Name: {TournamentStateService.TeamNames[i]}");
+        }
+
+        TournamentStateService.AddTeams(TournamentStateService.TeamNames);
+
+        // Proceed to the next step
+        await Task.Delay(100);
+        NavigationManager.NavigateTo("/tournaments/create/step4");
+    }
+}

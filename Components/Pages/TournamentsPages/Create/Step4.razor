@@ -1,0 +1,129 @@
+﻿@page "/tournaments/create/step4"
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Authorization
+@using tournament_blazor.Models.db_manager
+@using tournament_blazor.Services
+@using tournament_blazor.Models.helpers
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@inject TournamentStateService TournamentStateService
+@inject NavigationManager NavigationManager
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+<h2 class="text-center mb-4">Step 4: Enter Tournament Details</h2>
+
+<div class="card shadow p-4 mb-5 bg-white rounded">
+    <EditForm Model="@TournamentStateService.Tournament" OnValidSubmit="CompleteCreation" FormName="Step4Form">
+        <DataAnnotationsValidator />
+        <ValidationSummary class="text-danger" />
+
+        <div class="mb-3">
+            <label for="tournamentName" class="form-label fw-bold">Tournament Name</label>
+            <InputText @bind-Value="TournamentStateService.Tournament.TournamentName" class="form-control" placeholder="Enter tournament name" />
+            <ValidationMessage For="@(() => TournamentStateService.Tournament.TournamentName)" />
+        </div>
+
+        <div class="mb-3">
+            <label for="isPublic" class="form-label fw-bold">Is the Tournament Public?</label>
+            <div class="form-check">
+                <InputCheckbox id="isPublic" @bind-Value="TournamentStateService.Tournament.IsPublic" class="form-check-input" />
+                <label class="form-check-label" for="isPublic">Public Tournament</label>
+            </div>
+            <ValidationMessage For="@(() => TournamentStateService.Tournament.IsPublic)" />
+        </div>
+
+        <div class="mb-3">
+            <label for="startDate" class="form-label fw-bold">Start Date</label>
+            <InputDate @bind-Value="TournamentStateService.Tournament.StartDate" class="form-control" placeholder="Select start date" />
+            <ValidationMessage For="@(() => TournamentStateService.Tournament.StartDate)" />
+        </div>
+
+        <div class="mb-3">
+            <label for="endDate" class="form-label fw-bold">End Date</label>
+            <InputDate @bind-Value="TournamentStateService.Tournament.EndDate" class="form-control" placeholder="Select end date" />
+            <ValidationMessage For="@(() => TournamentStateService.Tournament.EndDate)" />
+        </div>
+
+        <div class="mb-3">
+            <label for="imageUrl" class="form-label fw-bold">Tournament Image URL</label>
+            <InputText @bind-Value="TournamentStateService.Tournament.ImageUrl" class="form-control" placeholder="Enter image URL" />
+            <ValidationMessage For="@(() => TournamentStateService.Tournament.ImageUrl)" />
+        </div>
+
+        <div class="d-grid">
+            <button class="btn btn-primary btn-lg" type="submit">Complete</button>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private async Task CompleteCreation()
+    {
+        Console.WriteLine("Completing tournament creation...");
+
+        using var context = await DbFactory.CreateDbContextAsync();
+
+        // Start a transaction to ensure atomicity in case of errors
+        using var transaction = await context.Database.BeginTransactionAsync();
+
+        try
+        {
+            // Save the tournament first
+            context.Tournaments.Add(TournamentStateService.Tournament);
+            await context.SaveChangesAsync();
+
+            var savedTournamentId = TournamentStateService.Tournament.TournamentID;
+
+            // Save the teams
+            foreach (var team in TournamentStateService.Teams)
+            {
+                team.TournamentID = savedTournamentId;
+                context.Teams.Add(team);
+            }
+
+            // Save teams to the database
+            await context.SaveChangesAsync();
+            Console.WriteLine("Teams saved successfully!");
+
+            // Retrieve the saved teams with their IDs
+            var savedTeams = await context.Teams
+                .Where(t => t.TournamentID == savedTournamentId)
+                .ToListAsync();
+
+            // Update the TournamentStateService.Teams list with saved teams
+            TournamentStateService.Teams = savedTeams;
+
+            // Create an instance of the helper functions
+            var helperFunctions = new Functions();
+
+            // Generate matches now that teams are saved
+            if (TournamentStateService.Tournament.TournamentTypeID == 1)
+            {
+                // Bracket Matches
+                helperFunctions.GenerateBracketMatches(TournamentStateService, context);
+            }
+            else if (TournamentStateService.Tournament.TournamentTypeID == 2)
+            {
+                // Round Robin Matches
+                helperFunctions.GenerateBalancedRoundRobinMatches(TournamentStateService, context);
+            }
+
+            // Save the generated matches to the database
+            await context.SaveChangesAsync();
+
+            // Commit the transaction
+            await transaction.CommitAsync();
+            Console.WriteLine("Teams, matches, and tournament saved successfully!");
+
+            await Task.Delay(100);
+            TournamentStateService.ResetTournament();
+            NavigationManager.NavigateTo("/tournaments");
+        }
+        catch (Exception ex)
+        {
+            // Rollback the transaction in case of an error
+            await transaction.RollbackAsync();
+            Console.WriteLine($"Error occurred: {ex.Message}. Transaction rolled back.");
+        }
+    }
+}

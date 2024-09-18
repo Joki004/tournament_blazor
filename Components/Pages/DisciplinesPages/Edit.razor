@@ -1,0 +1,100 @@
+﻿@page "/Disciplines/edit"
+
+@using Microsoft.EntityFrameworkCore
+@using tournament_blazor.Models.db_manager
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@inject NavigationManager NavigationManager
+
+<PageTitle>Edit</PageTitle>
+
+<h1>Edit</h1>
+
+<h4>Disciplines</h4>
+<hr />
+@if (Disciplines is null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-4">
+            <EditForm method="post" Model="Disciplines" OnValidSubmit="UpdateDisciplines" FormName="edit" Enhance>
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <input type="hidden" name="Disciplines.DisciplineID" value="@Disciplines.DisciplineID" />
+                <div class="mb-3">
+                    <label for="disciplinename" class="form-label">DisciplineName:</label>
+                    <InputText id="disciplinename" @bind-Value="Disciplines.DisciplineName" class="form-control" />
+                    <ValidationMessage For="() => Disciplines.DisciplineName" class="text-danger" />
+                </div>
+                <div class="mb-3">
+                    <label for="description" class="form-label">Description:</label>
+                    <InputText id="description" @bind-Value="Disciplines.Description" class="form-control" />
+                    <ValidationMessage For="() => Disciplines.Description" class="text-danger" />
+                </div>
+                <div class="mb-3">
+                    <label for="playersperteam" class="form-label">PlayersPerTeam:</label>
+                    <InputNumber id="playersperteam" @bind-Value="Disciplines.PlayersPerTeam" class="form-control" />
+                    <ValidationMessage For="() => Disciplines.PlayersPerTeam" class="text-danger" />
+                </div>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </EditForm>
+        </div>
+    </div>
+}
+
+<div>
+    <a href="/disciplines">Back to List</a>
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    public Guid DisciplineID { get; set; }
+
+    [SupplyParameterFromForm]
+    public Disciplines? Disciplines { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = DbFactory.CreateDbContext();
+        Disciplines ??= await context.Disciplines.FirstOrDefaultAsync(m => m.DisciplineID == DisciplineID);
+
+        if (Disciplines is null)
+        {
+            NavigationManager.NavigateTo("notfound");
+        }
+    }
+
+    // To protect from overposting attacks, enable the specific properties you want to bind to.
+    // For more details, see https://aka.ms/RazorPagesCRUD.
+    public async Task UpdateDisciplines()
+    {
+        using var context = DbFactory.CreateDbContext();
+        context.Attach(Disciplines!).State = EntityState.Modified;
+
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            if (!DisciplinesExists(Disciplines!.DisciplineID))
+            {
+                NavigationManager.NavigateTo("notfound");
+            }
+            else
+            {
+                throw;
+            }
+        }
+
+        NavigationManager.NavigateTo("/disciplines");
+    }
+
+    bool DisciplinesExists(Guid disciplineid)
+    {
+        using var context = DbFactory.CreateDbContext();
+        return context.Disciplines.Any(e => e.DisciplineID == disciplineid);
+    }
+}

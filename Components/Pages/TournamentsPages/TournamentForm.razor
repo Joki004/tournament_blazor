@@ -1,0 +1,76 @@
+﻿@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Authorization
+@using tournament_blazor.Models.db_manager
+@using tournament_blazor.Services
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@inject TournamentStateService TournamentStateService
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@code {
+    [Parameter]
+    public Tournaments Tournaments { get; set; } = default!;
+
+    [Parameter]
+    public List<Disciplines> Disciplines { get; set; } = new();
+
+    private IBrowserFile? selectedImageFile;
+    private string? previewImageUrl;
+
+  
+}
+
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">Edit Tournament Details</h4>
+        </div>
+        <div class="card-body">
+
+            <!-- Is Public Checkbox -->
+            <div class="mb-3">
+                <label for="ispublic" class="form-label">Public Tournament:</label>
+                <InputCheckbox @bind-Value="Tournaments.IsPublic" class="form-check-input" />
+                <small class="form-text text-muted">Select if the tournament should be visible to the public.</small>
+            </div>
+
+            <!-- Tournament Name -->
+            <div class="mb-3">
+                <label for="tournamentname" class="form-label">Tournament Name:</label>
+                <InputText @bind-Value="Tournaments.TournamentName" class="form-control" placeholder="Enter tournament name" />
+            </div>
+
+            <!-- Discipline Dropdown -->
+            <div class="mb-3">
+                <label for="disciplineid" class="form-label">Discipline:</label>
+                <InputSelect @bind-Value="Tournaments.DisciplineID" class="form-control">
+                    <option value="">Select a discipline</option>
+                    @foreach (var discipline in Disciplines)
+                    {
+                        <option value="@discipline.DisciplineID">@discipline.DisciplineName</option>
+                    }
+                </InputSelect>
+                <small class="form-text text-muted">Choose the discipline for the tournament.</small>
+            </div>
+
+            <!-- Start Date -->
+            <div class="mb-3">
+                <label for="startdate" class="form-label">Start Date:</label>
+                <InputDate @bind-Value="Tournaments.StartDate" class="form-control" />
+            </div>
+
+       
+
+            <!-- Tournament Image URL -->
+            <div class="mb-3">
+                <label for="imageurl" class="form-label">Tournament Image URL:</label>
+                <InputText @bind-Value="Tournaments.ImageUrl" class="form-control" placeholder="Image URL" />
+            </div>
+
+        </div>
+    </div>
+</div>

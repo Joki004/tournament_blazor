@@ -1,0 +1,88 @@
+﻿@page "/tournaments/create/step2"
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Authorization
+@using tournament_blazor.Models.db_manager
+@using tournament_blazor.Services
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@inject TournamentStateService TournamentStateService
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+<h2 class="text-center mb-4">Step 2: Select Tournament Type</h2>
+
+<div class="card shadow p-4 mb-5 bg-white rounded">
+    @if (tournamentTypes == null)
+    {
+        <p class="text-center"><em>Loading tournament types...</em></p>
+    }
+    else
+    {
+        <EditForm OnValidSubmit="ProceedToStep3" Model="TournamentStateService.Tournament" FormName="Step2Form">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" />
+
+            <div class="form-group mb-4">
+                <label for="tournamentType" class="form-label fw-bold">Tournament Type</label>
+                <InputSelect id="tournamentType" @bind-Value="TournamentStateService.Tournament.TournamentTypeID" @onchange="OnTournamentTypeChanged" class="form-select">
+                    @foreach (var tournamentType in tournamentTypes)
+                    {
+                        <option value="@tournamentType.TournamentTypeID">@tournamentType.TournamentTypeName</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="@(() => TournamentStateService.Tournament.TournamentTypeID)" />
+            </div>
+
+            <div class="d-grid">
+                <button class="btn btn-primary btn-lg" type="submit">Next</button>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    private List<TournamentTypes>? tournamentTypes;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = DbFactory.CreateDbContext();
+        tournamentTypes = await context.TournamentTypes.ToListAsync();
+
+        // Set the first tournament type as default if none is selected
+        if (tournamentTypes.Any() && TournamentStateService.Tournament.TournamentTypeID == 0)
+        {
+            TournamentStateService.Tournament.TournamentTypeID = tournamentTypes.First().TournamentTypeID;
+        }
+    }
+
+    private void OnTournamentTypeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int selectedTournamentTypeId))
+        {
+            TournamentStateService.Tournament.TournamentTypeID = selectedTournamentTypeId;
+            Console.WriteLine($"Tournament Type Changed: {TournamentStateService.Tournament.TournamentTypeID}");
+        }
+    }
+
+    private async Task ProceedToStep3()
+    {
+        try
+        {
+            Console.WriteLine("Moving to Step 3...");
+            Console.WriteLine($"Tournament TypeID: {TournamentStateService.Tournament.TournamentTypeID}");
+
+            // Delay for UI update or debugging purposes
+            await Task.Delay(100);
+
+            NavigationManager.NavigateTo("/tournaments/create/step3");
+        }
+        catch (NavigationException ex)
+        {
+            // Handle the navigation exception (logging, error message, etc.)
+            Console.WriteLine($"Navigation error: {ex.Message}");
+        }
+    }
+}

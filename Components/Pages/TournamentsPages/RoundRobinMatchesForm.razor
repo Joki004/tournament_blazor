@@ -1,0 +1,72 @@
+﻿@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Authorization
+@using tournament_blazor.Models.db_manager
+@using tournament_blazor.Services
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@inject TournamentStateService TournamentStateService
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@code {
+    [Parameter]
+    public List<RoundRobinMatches> Matches { get; set; } = new();
+
+    private Dictionary<int, string> teamNames = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+
+        // Retrieve team names based on their IDs in the matches
+        var teamIDs = Matches.SelectMany(m => new[] { m.Team1ID, m.Team2ID }).Distinct();
+        var teams = await context.Teams.Where(t => teamIDs.Contains(t.TeamID)).ToListAsync();
+
+        // Fill the dictionary with team IDs and their names
+        foreach (var team in teams)
+        {
+            teamNames[team.TeamID] = team.TeamName;
+        }
+    }
+
+    private string GetTeamName(int teamID)
+    {
+        return teamNames.ContainsKey(teamID) ? teamNames[teamID] : "Unknown";
+    }
+
+    // If needed, you can also group by date for better visual organization
+    private IOrderedEnumerable<IGrouping<DateTime?, RoundRobinMatches>> GroupedMatches => Matches.GroupBy(m => m.MatchDate).OrderBy(g => g.Key);
+}
+
+<div class="container mt-4">
+    @foreach (var matchGroup in GroupedMatches)
+    {
+        <div class="card mb-5">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0">Matches on @matchGroup.Key?.ToShortDateString()</h4> <!-- Displaying the match date -->
+            </div>
+            <div class="card-body">
+                @foreach (var match in matchGroup)
+                {
+                    <div class="row align-items-center mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Match Date:</label>
+                            <InputDate @bind-Value="match.MatchDate" class="form-control" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Team 1 (@GetTeamName(match.Team1ID)):</label>
+                            <InputNumber @bind-Value="match.Team1Score" class="form-control" placeholder="Enter Score" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Team 2 (@GetTeamName(match.Team2ID)):</label>
+                            <InputNumber @bind-Value="match.Team2Score" class="form-control" placeholder="Enter Score" />
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>

@@ -1,0 +1,82 @@
+﻿@page "/tournaments"
+
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@using tournament_blazor.Models.db_manager
+@inject IDbContextFactory<tournament_blazor.Data.tournamentDbContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@rendermode InteractiveServer
+<PageTitle>Tournaments</PageTitle>
+
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="text-primary">Tournaments</h1>
+        <a href="tournaments/create/Step1" class="btn btn-success">Create New</a>
+    </div>
+
+    <!-- Grid Row for the tournaments -->
+    <div class="row">
+        @if (tournaments == null)
+        {
+            <p><em>Loading...</em></p>
+        }
+        else
+        {
+            @foreach (var tournament in tournaments)
+            {
+                @if (tournament.IsPublic || tournament.UserID == currentUserId)
+                {
+                    <div class="col-lg-4 col-md-6 mb-4">
+                        <div class="card h-100 shadow-sm" style="min-height: 420px;">
+                            <!-- Tournament Image -->
+                            <img class="card-img-top" src="@tournament.ImageUrl" alt="Tournament Image" style="height: 160px; object-fit: cover;">
+
+                            <!-- Tournament Details -->
+                            <div class="card-body">
+                                <h5 class="card-title text-primary">@tournament.TournamentName</h5>
+                                <p class="card-text">
+                                    <strong>Discipline:</strong> @tournament.Discipline?.DisciplineName <br />
+                                    <strong>Teams:</strong> @tournament.NumberOfTeams <br />
+                                    <strong>Start Date:</strong> @tournament.StartDate.ToShortDateString()
+                                </p>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <a href="@($"tournaments/details?tournamentid={tournament.TournamentID}")" class="btn btn-outline-primary">Details</a>
+
+                                    <!-- Edit and Delete buttons if the user is the owner -->
+                                    @if (tournament.UserID == currentUserId)
+                                    {
+                                        <a href="@($"tournaments/edit?tournamentid={tournament.TournamentID}")" class="btn btn-outline-secondary">Edit</a>
+                                        <a href="@($"tournaments/delete?tournamentid={tournament.TournamentID}")" class="btn btn-outline-danger">Delete</a>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private List<Tournaments> tournaments = new();
+    private string? currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+
+        // Get the current user's ID using the correct claim type
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = authState.User?.FindFirst(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
+
+        // Log the current user ID for debugging
+        Console.WriteLine($"Current User ID: {currentUserId}");
+
+        // Load all tournaments
+        tournaments = await context.Tournaments
+            .Include(t => t.Discipline)  // Include related Discipline entity
+            .ToListAsync();
+    }
+}
